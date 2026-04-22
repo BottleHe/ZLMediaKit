@@ -948,10 +948,9 @@ int h264DecSeqParameterSet(void *pvBufSrc, T_SPS *ptSps)
     if (iLog2MaxFrameNumMinus4 < MIN_LOG2_MAX_FRAME_NUM - 4 ||
         iLog2MaxFrameNumMinus4 > MAX_LOG2_MAX_FRAME_NUM - 4)
     {
-        RPT(RPT_ERR, "iLog2MaxFrameNumMinus4 out of range (0-12): %d\n", iLog2MaxFrameNumMinus4);
-        iRet = -1;
-        goto exit;
-
+        // 使用默认值0 (MaxFrameNum=16)，计算时加4
+        RPT(RPT_WRN, "iLog2MaxFrameNumMinus4 out of range (0-12): %d, using default 0\n", iLog2MaxFrameNumMinus4);
+        iLog2MaxFrameNumMinus4 = 0;
     }
     ptSps->iLog2MaxFrameNum = iLog2MaxFrameNumMinus4 + 4;
 

@@ -27,6 +27,10 @@ void JT1078RtpDecoder::setOnTrack(onTrackCB cb) {
     _on_track = std::move(cb);
 }
 
+void JT1078RtpDecoder::setOnTrackCompleted(onTrackCompletedCB cb) {
+    _on_track_completed = std::move(cb);
+}
+
 bool JT1078RtpDecoder::inputData(const char *data, size_t len) {
     if (len < JT1078Const::kFixedHeaderSize) {
         WarnL << "JT1078 data too short: " << len;
@@ -82,7 +86,6 @@ bool JT1078RtpDecoder::handleSubpackage(const char *payload, size_t len,
             return outputFrame(payload, len, ext_header, dts, pts, ext_header.isKeyFrame());
 
         case JT1078SubpackageMark::First: {
-            // 开始新帧
             auto &cache = _frame_cache[channel];
             cache.data.clear();
             cache.data.assign(payload, payload + len);
@@ -144,13 +147,11 @@ bool JT1078RtpDecoder::outputFrame(const char *payload, size_t len,
     Frame::Ptr frame;
 
     if (ext_header.isVideo()) {
-        // H264 视频 - 先尝试创建 Track
         if (key_frame) {
             createTrackIfNeed(payload, len, dts, ext_header.channel, true);
         }
         frame = makeH264Frame(payload, len, dts, pts, key_frame);
     } else if (ext_header.isAudio()) {
-        // AAC 音频 - 创建音频 Track
         if (!_audio_track_created) {
             _audio_track_created = true;
             auto track = Factory::getTrackByCodecId(CodecAAC, 8000, 1, 16);
@@ -160,7 +161,6 @@ bool JT1078RtpDecoder::outputFrame(const char *payload, size_t len,
         }
         frame = makeAACFrame(payload, len, dts);
     } else {
-        // 透传数据，忽略
         return true;
     }
 
@@ -168,7 +168,6 @@ bool JT1078RtpDecoder::outputFrame(const char *payload, size_t len,
         return false;
     }
 
-    frame->setIndex(ext_header.channel);
     _last_dts = dts;
 
     if (_on_frame) {
@@ -180,13 +179,19 @@ bool JT1078RtpDecoder::outputFrame(const char *payload, size_t len,
 
 Frame::Ptr JT1078RtpDecoder::makeH264Frame(const char *data, size_t len,
                                            uint64_t dts, uint64_t pts, bool key_frame) {
-    // JT1078 的 H.264 数据没有 0x00000001 起始码
-    // 需要添加起始码，使用 FrameImp 方式
     auto frame_imp = FrameImp::create<H264Frame>();
     frame_imp->_codec_id = CodecH264;
     frame_imp->_dts = dts;
     frame_imp->_pts = pts;
-    frame_imp->_prefix_size = 4; // 0x00 00 00 01 起始码
+
+    auto prefix = prefixSize(data, len);
+    if (prefix > 0) {
+        frame_imp->_prefix_size = prefix;
+        frame_imp->_buffer.assign(data, len);
+        return frame_imp;
+    }
+
+    frame_imp->_prefix_size = 4;
     frame_imp->_buffer.assign("\x00\x00\x00\x01", 4);
     frame_imp->_buffer.append(data, len);
 
@@ -241,13 +246,10 @@ bool JT1078RtpDecoder::isFrameComplete(uint8_t channel) {
 }
 
 void JT1078RtpDecoder::flush() {
-    // 输出所有未完成的帧
     for (auto &[channel, cache] : _frame_cache) {
         if (cache.started && !cache.data.empty()) {
-            // 输出未完成帧（不应该发生，但以防万一）
             WarnL << "Flushing incomplete frame, channel=" << (int)channel
                   << ", data_size=" << cache.data.size();
-            // 构建假的 ext_header 以调用 outputFrame
             JT1078ExtHeader ext_header;
             ext_header.channel = channel;
             ext_header.data_type = cache.data_type;
@@ -270,26 +272,18 @@ void JT1078RtpDecoder::setOnFrame(onFrameCB cb) {
     _on_frame = std::move(cb);
 }
 
-#define H264_TYPE(v) ((uint8_t)(v) & 0x1F)
-
 bool JT1078RtpDecoder::createTrackIfNeed(const char *data, size_t len, uint64_t dts, uint8_t channel, bool key_frame) {
     if (_video_track_created) {
         return true;
     }
 
-    // JT1078 的 H.264 数据可能是:
-    // 1. 起始码格式 (0x00000001) - 每个NAL单元前有start code
-    // 2. 长度前缀格式 (4字节长度) - 类似于MP4/FLV
-
     string sps;
     string pps;
 
-    // 首先尝试查找 start code 格式
     const char *ptr = data;
     size_t remain = len;
 
     while (remain >= 4) {
-        // 检查是否是 start code (0x00000001 或 0x000001)
         size_t start_code_len = 0;
         if (ptr[0] == 0x00 && ptr[1] == 0x00) {
             if (ptr[2] == 0x01) {
@@ -299,17 +293,25 @@ bool JT1078RtpDecoder::createTrackIfNeed(const char *data, size_t len, uint64_t 
             }
         }
 
-        if (start_code_len > 0) {
-            // 有 start code，NAL type 在 start_code 之后
-            uint8_t nal_type = ptr[start_code_len] & 0x1F;
-            const char *nal_start = ptr + start_code_len + 1;
-            size_t nal_len = remain - start_code_len - 1;
+        // 排除假阳性: 连续零填充中产生的伪 start code
+        if (start_code_len > 0 && ptr > data && remain > start_code_len) {
+            uint8_t nal_type = ptr[start_code_len];
+            if (ptr[-1] == 0x00 && nal_type == 0x00) {
+                ptr++;
+                remain--;
+                continue;
+            }
+        }
 
-            // 查找下一个 start code 来确定 NAL 长度
+        if (start_code_len > 0) {
+            uint8_t nal_type = ptr[start_code_len] & 0x1F;
+            const char *nal_start = ptr + start_code_len;
+            size_t nal_len = remain - start_code_len;
+
             const char *next_start = nullptr;
-            for (size_t i = 4; i < nal_len; ++i) {
+            for (size_t i = 4; i + 1 < nal_len; ++i) {
                 if (nal_start[i] == 0x00 && nal_start[i+1] == 0x00) {
-                    if (nal_start[i+2] == 0x01 || (i+3 < nal_len && nal_start[i+2] == 0x00 && nal_start[i+3] == 0x01)) {
+                    if (nal_start[i+2] == 0x01 || (i + 3 < nal_len && nal_start[i+2] == 0x00 && nal_start[i+3] == 0x01)) {
                         next_start = nal_start + i;
                         break;
                     }
@@ -320,49 +322,48 @@ bool JT1078RtpDecoder::createTrackIfNeed(const char *data, size_t len, uint64_t 
                 nal_len = next_start - nal_start;
             }
 
-            if (nal_type == 7) { // SPS
+            if (nal_type == 7) {
                 sps.assign(nal_start, nal_len);
                 TraceL << "Found SPS (start code), length=" << nal_len;
-            } else if (nal_type == 8) { // PPS
+            } else if (nal_type == 8) {
                 pps.assign(nal_start, nal_len);
                 TraceL << "Found PPS (start code), length=" << nal_len;
             }
 
-            ptr = next_start ? (next_start - start_code_len - 1 + nal_len + start_code_len) : (ptr + nal_len + start_code_len + 1);
-            remain = (ptr < data + len) ? (data + len - ptr) : 0;
             if (next_start) {
                 ptr = next_start;
                 remain = (ptr < data + len) ? (data + len - ptr) : 0;
             } else {
-                break;
+                ptr = nal_start + nal_len;
+                remain = (ptr < data + len) ? (data + len - ptr) : 0;
+                if (remain < 4) {
+                    break;
+                }
             }
         } else {
-            // 没有 start code，尝试长度前缀格式
             break;
         }
     }
 
-    // 如果没找到 start code，尝试长度前缀格式
     if (sps.empty() && pps.empty() && len >= 5) {
         ptr = data;
         remain = len;
         while (remain >= 5) {
-            // 尝试解析为长度前缀格式
             size_t nal_len = (static_cast<uint8_t>(ptr[0]) << 24) |
                              (static_cast<uint8_t>(ptr[1]) << 16) |
                              (static_cast<uint8_t>(ptr[2]) << 8) |
                              static_cast<uint8_t>(ptr[3]);
 
+            uint8_t nal_type = ptr[4] & 0x1F;
+
             if (nal_len > remain - 4 || nal_len == 0) {
                 break;
             }
 
-            uint8_t nal_type = ptr[4] & 0x1F;
-
-            if (nal_type == 7) { // SPS
+            if (nal_type == 7) {
                 sps.assign(ptr + 4, nal_len);
                 TraceL << "Found SPS (length prefix), length=" << nal_len;
-            } else if (nal_type == 8) { // PPS
+            } else if (nal_type == 8) {
                 pps.assign(ptr + 4, nal_len);
                 TraceL << "Found PPS (length prefix), length=" << nal_len;
             }
@@ -374,11 +375,15 @@ bool JT1078RtpDecoder::createTrackIfNeed(const char *data, size_t len, uint64_t 
 
     if (!sps.empty() && !pps.empty()) {
         _video_track_created = true;
-        auto track = std::make_shared<H264Track>(sps, pps);
+        // sps/pps 数据已不含 start code，prefix_len 传 0
+        auto track = std::make_shared<H264Track>(sps, pps, 0, 0);
         InfoL << "Created H264Track, sps_size=" << sps.size() << ", pps_size=" << pps.size()
               << ", width=" << track->getVideoWidth() << ", height=" << track->getVideoHeight();
         if (_on_track) {
             _on_track(track);
+        }
+        if (_on_track_completed) {
+            _on_track_completed();
         }
         return true;
     }

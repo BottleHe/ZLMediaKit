@@ -131,6 +131,12 @@ bool JT1078Process::inputRtp(bool is_udp, const Socket::Ptr &sock, const char *d
             }
             return false;
         });
+        _decoder->setOnTrackCompleted([weak_self]() {
+            auto strong_self = weak_self.lock();
+            if (strong_self) {
+                strong_self->addTrackCompleted();
+            }
+        });
         InfoP(this) << "JT1078 decoder created";
     }
 
@@ -229,22 +235,11 @@ bool JT1078Process::inputFrame(const Frame::Ptr &frame) {
 
 bool JT1078Process::addTrack(const Track::Ptr &track) {
     if (_muxer) {
-        bool ret = _muxer->addTrack(track);
-        if (ret && !_track_completed) {
-            _track_completed = true;
-            _muxer->addTrackCompleted();
-            InfoP(this) << "JT1078 tracks ready";
-        }
-        return ret;
+        return _muxer->addTrack(track);
     }
     lock_guard<recursive_mutex> lck(_func_mtx);
     _cached_func.emplace_back([this, track]() {
         _muxer->addTrack(track);
-        if (!_track_completed) {
-            _track_completed = true;
-            _muxer->addTrackCompleted();
-            InfoP(this) << "JT1078 tracks ready (cached)";
-        }
     });
     return true;
 }

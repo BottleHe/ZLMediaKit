@@ -65,6 +65,13 @@ public:
     void setOnTrack(onTrackCB cb);
 
     /**
+     * 设置 Track 创建完成回调
+     * 当所有 Track 都添加完毕时调用
+     */
+    using onTrackCompletedCB = std::function<void()>;
+    void setOnTrackCompleted(onTrackCompletedCB cb);
+
+    /**
      * 处理分包
      * @param payload 数据负载指针
      * @param len 数据长度
@@ -111,6 +118,7 @@ private:
 private:
     onFrameCB _on_frame;
     onTrackCB _on_track;
+    onTrackCompletedCB _on_track_completed;
 
     // Track 创建状态
     bool _video_track_created = false;
