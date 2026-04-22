@@ -41,11 +41,17 @@ public:
     /**
      * 刷新输出所有缓存
      * Refresh and output all caches
-     
-     
+
+
      * [AUTO-TRANSLATED:4509b01f]
      */
     virtual void flush() {}
+
+    /**
+     * 设置是否启用 SSRC 检查
+     * @param enable true-启用SSRC检查(默认), false-禁用SSRC检查(用于JT1078等没有SSRC字段的协议)
+     */
+    virtual void enableSSRCcheck(bool enable) {}
 };
 
 }//namespace mediakit

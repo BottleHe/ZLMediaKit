@@ -37,7 +37,7 @@ public:
      * @param data rtp data pointer
      * @param data_len rtp data length
      * @return Whether the parsing is successful
-     
+
      * [AUTO-TRANSLATED:d7b14ffe]
      */
     bool inputRtp(bool, const char *data, size_t data_len) override;
@@ -45,11 +45,18 @@ public:
     /**
      * 刷新输出所有缓存
      * Refresh and output all caches
-     
-     
+
+
+
      * [AUTO-TRANSLATED:4509b01f]
      */
     void flush() override;
+
+    /**
+     * 设置是否启用 SSRC 检查
+     * @param enable true-启用SSRC检查(默认), false-禁用SSRC检查(用于JT1078等没有SSRC字段的协议)
+     */
+    void enableSSRCcheck(bool enable) override;
 
 protected:
     void onRtpSorted(RtpPacket::Ptr rtp);
@@ -64,6 +71,7 @@ private:
     std::shared_ptr<FILE> _save_file_ps;
     std::unordered_map<uint8_t, RtpCodec::Ptr> _rtp_decoder;
     std::unordered_map<uint8_t, std::shared_ptr<RtpReceiverImp> > _rtp_receiver;
+    bool _enable_ssrc_check = true;
 };
 
 }//namespace mediakit

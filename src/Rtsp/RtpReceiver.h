@@ -257,12 +257,19 @@ public:
     void setNtpStamp(uint32_t rtp_stamp, uint64_t ntp_stamp_ms);
     void setPayloadType(uint8_t pt);
 
+    /**
+     * 设置是否启用 SSRC 检查
+     * @param enable true-启用SSRC检查(默认), false-禁用SSRC检查(用于JT1078等没有SSRC字段的协议)
+     */
+    void enableSSRCcheck(bool enable);
+
 protected:
     virtual void onRtpSorted(RtpPacket::Ptr rtp) {}
     virtual void onBeforeRtpSorted(const RtpPacket::Ptr &rtp) {}
 
 private:
     bool _disable_ntp = false;
+    bool _enable_ssrc_check = true;
     uint8_t _pt = 0xFF;
     uint32_t _ssrc = 0;
     toolkit::Ticker _ssrc_alive;

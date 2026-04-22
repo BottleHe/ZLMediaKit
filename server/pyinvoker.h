@@ -41,6 +41,7 @@ public:
     bool on_send_rtp_stopped(BroadcastSendRtpStoppedArgs) const;
     bool on_http_access(BroadcastHttpAccessArgs) const;
     bool on_rtp_server_timeout(BroadcastRtpServerTimeoutArgs) const;
+    bool on_jt1078_server_timeout(BroadcastJt1078ServerTimeoutArgs) const;
 
 private:
     PythonInvoker();
@@ -83,6 +84,8 @@ private:
     py::function _on_http_access;
     // rtp服务收流超时事件
     py::function _on_rtp_server_timeout;
+    // jt1078服务收流超时事件
+    py::function _on_jt1078_server_timeout;
     // 创建Python muxer对象
     py::function _on_create_muxer;
 

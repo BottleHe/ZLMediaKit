@@ -153,6 +153,12 @@ bool GB28181Process::inputRtp(bool, const char *data, size_t data_len) {
             }
         } while (false);
 
+        // 如果禁用SSRC检查，则对新创建的接收器生效
+        // If SSRC check is disabled, apply it to the newly created receiver
+        if (!_enable_ssrc_check) {
+            ref->enableSSRCcheck(false);
+        }
+
         // 设置frame回调  [AUTO-TRANSLATED:dec7590f]
         // Set frame callback
         _rtp_decoder[pt]->addDelegate([this, pt](const Frame::Ptr &frame) {
@@ -202,6 +208,13 @@ void GB28181Process::onRtpDecode(const Frame::Ptr &frame) {
 
     if (_decoder) {
         _decoder->input(reinterpret_cast<const uint8_t *>(frame->data()), frame->size());
+    }
+}
+
+void GB28181Process::enableSSRCcheck(bool enable) {
+    _enable_ssrc_check = enable;
+    for (auto &kv : _rtp_receiver) {
+        kv.second->enableSSRCcheck(enable);
     }
 }
 

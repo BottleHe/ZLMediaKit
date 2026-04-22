@@ -24,6 +24,7 @@
 #include "Shell/ShellSession.h"
 #include "Http/WebSocketSession.h"
 #include "Rtp/RtpServer.h"
+#include "JT1078/JT1078Server.h"
 #include "WebApi.h"
 #include "WebHook.h"
 
@@ -110,6 +111,18 @@ onceToken token1([](){
     mINI::Instance()[kPort] = 10000;
 });
 } //namespace RtpProxy
+
+// //////////JT1078相关配置///////////
+// //////////JT1078 related configuration///////////
+namespace JT1078 {
+#define JT1078_FIELD "jt1078."
+const string kPort = JT1078_FIELD"port";
+const string kPortRange = JT1078_FIELD"port_range";
+onceToken token1([](){
+    mINI::Instance()[kPort] = 10001;
+    mINI::Instance()[kPortRange] = "35000-45000";
+});
+} //namespace JT1078
 
 namespace Python {
 #define Python_FIELD "python."
@@ -338,6 +351,7 @@ int start_main(int argc,char *argv[]) {
         uint16_t httpPort = mINI::Instance()[Http::kPort];
         uint16_t httpsPort = mINI::Instance()[Http::kSSLPort];
         uint16_t rtpPort = mINI::Instance()[RtpProxy::kPort];
+        uint16_t jt1078Port = mINI::Instance()[JT1078::kPort];
 
         // 简单的telnet服务器，可用于服务器调试，但是不能使用23端口，否则telnet上了莫名其妙的现象  [AUTO-TRANSLATED:f9324c6e]
         // Simple telnet server, can be used for server debugging, but cannot use port 23, otherwise telnet will have inexplicable phenomena
@@ -450,6 +464,11 @@ int start_main(int argc,char *argv[]) {
             // 创建rtp服务器  [AUTO-TRANSLATED:873f7f52]
             // create rtp server
             if (rtpPort) { rtpServer->start(rtpPort, listen_ip.c_str()); }
+
+            // JT1078 服务器  [AUTO-TRANSLATED:8a9b2872]
+            // JT1078 server
+            auto jt1078Server = std::make_shared<JT1078Server>();
+            if (jt1078Port) { jt1078Server->start(jt1078Port, listen_ip.c_str()); }
 #endif//defined(ENABLE_RTPPROXY)
 
 #if defined(ENABLE_WEBRTC)

@@ -64,26 +64,32 @@ RtpPacket::Ptr RtpTrack::inputRtp(TrackType type, int sample_rate, uint8_t *ptr,
         return nullptr;
     }
 
-    if (!_ssrc) {
-        // 记录并锁定ssrc  [AUTO-TRANSLATED:29452029]
-        // Record and lock ssrc
-        _ssrc = ssrc;
-        _ssrc_alive.resetTime();
-    } else if (_ssrc == ssrc) {
-        // ssrc匹配正确,刷新计时器  [AUTO-TRANSLATED:266518e6]
-        // SSRC matches correctly, refresh timer
-        _ssrc_alive.resetTime();
-    } else {
-        // ssrc错误  [AUTO-TRANSLATED:b967d497]
-        // SSRC error
-        if (_ssrc_alive.elapsedTime() < 3 * 1000) {
-            // 接收正确ssrc的rtp在10秒内，那么我们认为存在多路rtp,忽略掉ssrc不匹配的rtp  [AUTO-TRANSLATED:2f98c2b5]
-            // If the RTP with the correct SSRC is received within 10 seconds, we consider it to be multi-path RTP, and ignore the RTP with mismatched SSRC
-            WarnL << "ssrc mismatch, rtp dropped:" << ssrc << " != " << _ssrc;
-            return nullptr;
+    if (_enable_ssrc_check) {
+        if (!_ssrc) {
+            // 记录并锁定ssrc
+            // Record and lock ssrc
+            _ssrc = ssrc;
+            _ssrc_alive.resetTime();
+        } else if (_ssrc == ssrc) {
+            // ssrc匹配正确,刷新计时器
+            // SSRC matches correctly, refresh timer
+            _ssrc_alive.resetTime();
+        } else {
+            // ssrc错误
+            // SSRC error
+            if (_ssrc_alive.elapsedTime() < 3 * 1000) {
+                // 接收正确ssrc的rtp在10秒内，那么我们认为存在多路rtp,忽略掉ssrc不匹配的rtp
+                // If the RTP with the correct SSRC is received within 10 seconds, we consider it to be multi-path RTP, and ignore the RTP with mismatched SSRC
+                WarnL << "ssrc mismatch, rtp dropped:" << ssrc << " != " << _ssrc;
+                return nullptr;
+            }
+            InfoL << "rtp ssrc changed:" << _ssrc << " -> " << ssrc;
+            _ssrc = ssrc;
+            _ssrc_alive.resetTime();
         }
-        InfoL << "rtp ssrc changed:" << _ssrc << " -> " << ssrc;
-        _ssrc = ssrc;
+    } else {
+        // SSRC检查被禁用（例如JT1078协议没有SSRC字段）
+        // SSRC check is disabled (e.g., JT1078 protocol has no SSRC field)
         _ssrc_alive.resetTime();
     }
 
@@ -128,6 +134,10 @@ void RtpTrack::setNtpStamp(uint32_t rtp_stamp, uint64_t ntp_stamp_ms) {
 
 void RtpTrack::setPayloadType(uint8_t pt) {
     _pt = pt;
+}
+
+void RtpTrack::enableSSRCcheck(bool enable) {
+    _enable_ssrc_check = enable;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////

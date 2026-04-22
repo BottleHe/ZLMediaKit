@@ -51,6 +51,7 @@
 
 #if defined(ENABLE_RTPPROXY)
 #include "Rtp/RtpServer.h"
+#include "JT1078/JT1078Manager.h"
 #endif
 
 #ifdef ENABLE_WEBRTC
@@ -339,6 +340,10 @@ static ServiceController<FFmpegSource> s_ffmpeg_src;
 // rtp服务器列表  [AUTO-TRANSLATED:2e362a8c]
 // RTP server list
 static ServiceController<RtpServer> s_rtp_server;
+
+// JT1078 拉流管理器  [AUTO-TRANSLATED:8a9b2872]
+// JT1078 pull stream manager
+static JT1078Manager s_jt1078_manager;
 #endif
 
 
@@ -796,6 +801,13 @@ template void check_secret<std::string>(toolkit::SockInfo &, mediakit::HttpSessi
  */
 void installWebApi() {
     addHttpListener();
+
+#if defined(ENABLE_RTPPROXY)
+    // 监听 JT1078 超时事件，推流超时时自动关闭监听
+    NoticeCenter::Instance().addListener(nullptr, Broadcast::kBroadcastJt1078ServerTimeout, [](BroadcastJt1078ServerTimeoutArgs) {
+        s_jt1078_manager.stopRecvJt1078(tuple.stream);
+    });
+#endif
 
     // 获取线程负载  [AUTO-TRANSLATED:3b0ece5c]
     // Get thread load
@@ -1691,6 +1703,43 @@ void installWebApi() {
                 invoker(200, headerOut, val.toStyledString());
             }
         });
+    });
+
+    api_regist("/index/api/startRecvJt1078", [](API_ARGS_MAP_ASYNC) {
+        CHECK_SECRET();
+        CHECK_ARGS("stream");
+        auto stream_id = allArgs["stream"];
+        auto vhost = allArgs["vhost"].empty() ? DEFAULT_VHOST : allArgs["vhost"];
+        auto app = allArgs["app"].empty() ? kJT1078AppName : allArgs["app"];
+        auto ssrc = allArgs["ssrc"].empty() ? 0 : allArgs["ssrc"].as<uint32_t>();
+        auto port = allArgs["port"].empty() ? 0 : allArgs["port"].as<int>();
+        GET_CONFIG(std::string, local_ip, General::kListenIP);
+        if (!allArgs["local_ip"].empty()) {
+            local_ip = allArgs["local_ip"];
+        }
+
+        try {
+            auto [ip, real_port] = s_jt1078_manager.startRecvJt1078(stream_id, vhost, app, ssrc, port, local_ip);
+            val["code"] = API::Success;
+            val["msg"] = "success";
+            val["ip"] = ip;
+            val["port"] = real_port;
+            val["stream"] = stream_id;
+        } catch (std::exception &ex) {
+            val["code"] = API::OtherFailed;
+            val["msg"] = ex.what();
+        }
+        invoker(200, headerOut, val.toStyledString());
+    });
+
+    api_regist("/index/api/stopRecvJt1078", [](API_ARGS_MAP_ASYNC) {
+        CHECK_SECRET();
+        CHECK_ARGS("stream");
+        auto stream_id = allArgs["stream"];
+        s_jt1078_manager.stopRecvJt1078(stream_id);
+        val["code"] = API::Success;
+        val["msg"] = "success";
+        invoker(200, headerOut, val.toStyledString());
     });
 
     api_regist("/index/api/listRtpSender",[](API_ARGS_MAP_ASYNC){

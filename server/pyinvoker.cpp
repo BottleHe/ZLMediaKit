@@ -632,6 +632,7 @@ PythonInvoker::~PythonInvoker() {
         _on_send_rtp_stopped = py::function();
         _on_http_access = py::function();
         _on_rtp_server_timeout = py::function();
+        _on_jt1078_server_timeout = py::function();
         _on_create_muxer = py::function();
         _module = py::module();
     }
@@ -664,6 +665,7 @@ void PythonInvoker::load(const std::string &module_name) {
         GET_FUNC(_module, on_send_rtp_stopped);
         GET_FUNC(_module, on_http_access);
         GET_FUNC(_module, on_rtp_server_timeout);
+        GET_FUNC(_module, on_jt1078_server_timeout);
         GET_FUNC(_module, on_create_muxer);
 
         if (hasattr(_module, "on_start")) {
@@ -787,6 +789,14 @@ bool PythonInvoker::on_rtp_server_timeout(BroadcastRtpServerTimeoutArgs) const {
         return false;
     }
     return _on_rtp_server_timeout(local_port, to_python_ref(tuple), tcp_mode, re_use_port, ssrc).cast<bool>();
+}
+
+bool PythonInvoker::on_jt1078_server_timeout(BroadcastJt1078ServerTimeoutArgs) const {
+    py::gil_scoped_acquire gil; // 确保在 Python 调用期间持有 GIL
+    if (!_on_jt1078_server_timeout) {
+        return false;
+    }
+    return _on_jt1078_server_timeout(local_port, to_python_ref(tuple)).cast<bool>();
 }
 
 } // namespace mediakit
