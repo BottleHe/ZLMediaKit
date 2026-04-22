@@ -714,6 +714,7 @@ bool MultiMediaSourceMuxer::onTrackReady(const Track::Ptr &track) {
 }
 
 void MultiMediaSourceMuxer::onAllTrackReady() {
+    InfoL << "MultiMediaSourceMuxer::onAllTrackReady called, stream=" << getMediaTuple().stream;
     CHECK(!_create_in_poller || getOwnerPoller(MediaSource::NullMediaSource())->isCurrentThread());
 
     if (_option.paced_sender_ms) {
@@ -756,6 +757,7 @@ void MultiMediaSourceMuxer::onAllTrackReady() {
 
 #if defined(ENABLE_RTPPROXY)
     GET_CONFIG(size_t, gop_cache, RtpProxy::kGopCache);
+    InfoL << "onAllTrackReady gop_cache=" << gop_cache;
     if (gop_cache > 0) {
         createGopCacheIfNeed(gop_cache);
     }
@@ -779,6 +781,7 @@ void MultiMediaSourceMuxer::createGopCacheIfNeed(size_t gop_count) {
     if (_ring) {
         return;
     }
+    InfoL << "createGopCacheIfNeed called, gop_count=" << gop_count << ", stream=" << getMediaTuple().stream;
     weak_ptr<MultiMediaSourceMuxer> weak_self = shared_from_this();
     auto src = std::make_shared<MediaSourceForMuxer>(weak_self.lock());
     _ring = std::make_shared<RingType>(1024, [weak_self, src](int size) {

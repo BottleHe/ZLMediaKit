@@ -138,6 +138,11 @@ extern const std::string kBroadcastReloadConfig;
 extern const std::string kBroadcastRtpServerTimeout;
 #define BroadcastRtpServerTimeoutArgs uint16_t &local_port, const MediaTuple &tuple, int &tcp_mode, bool &re_use_port, uint32_t &ssrc
 
+// jt1078 server 超时  [AUTO-TRANSLATED:a65573fd]
+// JT1078 server timeout
+extern const std::string kBroadcastJt1078ServerTimeout;
+#define BroadcastJt1078ServerTimeoutArgs uint16_t &local_port, const MediaTuple &tuple
+
 // rtc transport sctp 连接状态  [AUTO-TRANSLATED:f00284da]
 // Rtc transport sctp connection status
 extern const std::string kBroadcastRtcSctpConnecting;

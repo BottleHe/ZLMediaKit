@@ -7,7 +7,6 @@
  * LICENSE file in the root of the source tree. All contributing project authors
  * may be found in the AUTHORS file in the root of the source tree.
  */
-
 #include "Common/config.h"
 #include "MediaSource.h"
 #include "Util/NoticeCenter.h"
@@ -15,6 +14,7 @@
 #include "Util/onceToken.h"
 #include "Util/util.h"
 #include <assert.h>
+#include <filesystem>
 #include <stdio.h>
 
 using namespace std;
@@ -47,6 +47,7 @@ bool loadIniConfig(const char *ini_path) {
         // 更新注释和排序
         ref.updateFrom(tmp);
         NOTICE_EMIT(BroadcastReloadConfigArgs, Broadcast::kBroadcastReloadConfig);
+        InfoL << "loadIniConfig success, path=" << std::filesystem::canonical(ini) << ", rtp_proxy.gop_cache=" << ref["rtp_proxy.gop_cache"];
         return true;
     } catch (std::exception &) {
         InfoL << "dump ini file to:" << ini;
@@ -74,6 +75,7 @@ const string kBroadcastStreamNoneReader = "kBroadcastStreamNoneReader";
 const string kBroadcastHttpBeforeAccess = "kBroadcastHttpBeforeAccess";
 const string kBroadcastSendRtpStopped = "kBroadcastSendRtpStopped";
 const string kBroadcastRtpServerTimeout = "kBroadcastRtpServerTimeout";
+const string kBroadcastJt1078ServerTimeout = "kBroadcastJt1078ServerTimeout";
 const string kBroadcastRtcSctpConnecting = "kBroadcastRtcSctpConnecting";
 const string kBroadcastRtcSctpConnected = "kBroadcastRtcSctpConnected";
 const string kBroadcastRtcSctpFailed = "kBroadcastRtcSctpFailed";

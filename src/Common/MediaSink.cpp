@@ -104,8 +104,10 @@ bool MediaSink::inputFrame(const Frame::Ptr &frame) {
 }
 
 void MediaSink::checkTrackIfReady() {
+    InfoL << "checkTrackIfReady called, all_track_ready=" << _all_track_ready << ", callback_size=" << _track_ready_callback.size() << ", track_map.size=" << _track_map.size() << ", max_track_size=" << _max_track_size;
     if (!_all_track_ready && !_track_ready_callback.empty()) {
         for (auto &pr : _track_map) {
+            InfoL << "checkTrack callback loop: index=" << pr.first << ", have_frame=" << pr.second.second << ", ready=" << pr.second.first->ready() << ", codec=" << pr.second.first->getCodecName();
             if (pr.second.second && pr.second.first->ready()) {
                 // Track由未就绪状态转换成就绪状态，我们就触发onTrackReady回调  [AUTO-TRANSLATED:f8975e53]
                 // When a Track transitions from an unready state to a ready state, we trigger the onTrackReady callback
@@ -176,6 +178,7 @@ void MediaSink::checkTrackIfReady() {
 }
 
 void MediaSink::addTrackCompleted() {
+    InfoL << "MediaSink::addTrackCompleted called, track_map.size=" << _track_map.size() << ", all_track_ready=" << _all_track_ready;
     if (!_track_map.empty()) {
         setMaxTrackCount(_track_map.size());
     }
@@ -191,6 +194,7 @@ void MediaSink::setMaxTrackCount(size_t i) {
 }
 
 void MediaSink::emitAllTrackReady() {
+    InfoL << "MediaSink::emitAllTrackReady called, all_track_ready=" << _all_track_ready << ", track_map.size=" << _track_map.size();
     if (_all_track_ready) {
         return;
     }
@@ -234,6 +238,7 @@ void MediaSink::emitAllTrackReady() {
 }
 
 void MediaSink::onAllTrackReady_l() {
+    InfoL << "MediaSink::onAllTrackReady_l called";
     // 是否添加静音音频  [AUTO-TRANSLATED:bbfbfe73]
     // Whether to add silent audio
     if (_add_mute_audio) {

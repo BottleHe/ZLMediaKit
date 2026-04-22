@@ -54,6 +54,7 @@ const string kOnServerExited = HOOK_FIELD "on_server_exited";
 const string kOnServerKeepalive = HOOK_FIELD "on_server_keepalive";
 const string kOnSendRtpStopped = HOOK_FIELD "on_send_rtp_stopped";
 const string kOnRtpServerTimeout = HOOK_FIELD "on_rtp_server_timeout";
+const string kOnJt1078ServerTimeout = HOOK_FIELD "on_jt1078_server_timeout";
 const string kAliveInterval = HOOK_FIELD "alive_interval";
 const string kRetry = HOOK_FIELD "retry";
 const string kRetryDelay = HOOK_FIELD "retry_delay";
@@ -80,10 +81,11 @@ static onceToken token([]() {
     mINI::Instance()[kOnServerKeepalive] = "";
     mINI::Instance()[kOnSendRtpStopped] = "";
     mINI::Instance()[kOnRtpServerTimeout] = "";
+    mINI::Instance()[kOnJt1078ServerTimeout] = "";
     mINI::Instance()[kAliveInterval] = 30.0;
     mINI::Instance()[kRetry] = 1;
     mINI::Instance()[kRetryDelay] = 3.0;
-    mINI::Instance()[kStreamChangedSchemas] = "rtsp/rtmp/fmp4/ts/hls/hls.fmp4";
+    mINI::Instance()[kStreamChangedSchemas] = "rtsp/rtmp/fmp4/ts/hls/hls.fmp4/jt1078";
 });
 } // namespace Hook
 
@@ -851,6 +853,25 @@ void installWebHook() {
         body["re_use_port"] = re_use_port;
         body["ssrc"] = ssrc;
         do_http_hook(rtp_server_timeout, body);
+    });
+
+    NoticeCenter::Instance().addListener(&web_hook_tag, Broadcast::kBroadcastJt1078ServerTimeout, [](BroadcastJt1078ServerTimeoutArgs) {
+#if defined(ENABLE_PYTHON)
+        if (PythonInvoker::Instance().on_jt1078_server_timeout(local_port, tuple)) {
+            return;
+        }
+#endif
+        GET_CONFIG(string, hook_jt1078_server_timeout, Hook::kOnJt1078ServerTimeout);
+        if (!hook_enable || hook_jt1078_server_timeout.empty()) {
+            return;
+        }
+
+        ArgsType body;
+        body["local_port"] = local_port;
+        body[VHOST_KEY] = tuple.vhost;
+        body["app"] = tuple.app;
+        body["stream_id"] = tuple.stream;
+        do_http_hook(hook_jt1078_server_timeout, body);
     });
 
     NoticeCenter::Instance().addListener(&web_hook_tag, Broadcast::kBroadcastPlayerProxyFailed, [](BroadcastPlayerProxyFailedArgs) {
